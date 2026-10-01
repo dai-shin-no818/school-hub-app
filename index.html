@@ -172,11 +172,11 @@
 </head>
 <body>
 <header>
-  <h1>School Hub<span id="ver" style="font-size:11px;font-weight:400;color:#9aa0a8;margin-left:8px">v4</span></h1>
+  <h1>School Hub<span id="ver" style="font-size:11px;font-weight:400;color:#9aa0a8;margin-left:8px">v5</span></h1>
   <button id="refresh">更新</button>
 </header>
 <div id="newPage"><a id="newPageLink" target="_blank">スマホ用の画面を開く（Google でログイン・ホーム画面に追加できます）</a></div>
-<div class="bulkbar"><button id="filterBtn"></button><button id="bulk">まとめて済</button></div>
+<div class="bulkbar"><button id="filterBtn"></button><button id="bulk">全部済</button></div>
 <div id="filterPanel"></div>
 <div id="login" style="display:none;text-align:center;padding:24px 0">
   <p>はじめに Google でログインしてください（この端末で 1 回だけ）</p>
@@ -509,7 +509,7 @@ if (!window.HUB_STATIC) google.script.run.withSuccessHandler(u => { $('#newPageL
 </script>
 <script>
 (function(){
-  var VER = "v4";
+  var VER = "v5";
   function check(){
     fetch(location.pathname + '?v=' + Date.now(), { cache: 'no-store' }).then(function(r){ return r.text(); }).then(function(t){
       var m = t.match(/id="ver"[^>]*>([^<]+)</);
