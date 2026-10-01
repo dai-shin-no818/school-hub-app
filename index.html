@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="連絡まとめ">
+<meta name="apple-mobile-web-app-title" content="School Hub">
 <meta name="robots" content="noindex">
-<title>学校の連絡まとめ</title>
+<title>School Hub</title>
 <script src="https://accounts.google.com/gsi/client" async></script>
 <script>
 (function(){
@@ -89,8 +89,9 @@
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--text); font:15px/1.55 -apple-system,"Hiragino Sans",sans-serif;
          padding:12px 16px calc(24px + env(safe-area-inset-bottom)); }
-  header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px; }
-  h1 { font-size:19px; margin:0; }
+  header { position:relative; display:flex; align-items:center; justify-content:center; min-height:40px; margin-bottom:10px; }
+  h1 { font-size:19px; margin:0; text-align:center; }
+  #refresh { position:absolute; right:0; top:50%; transform:translateY(-50%); }
   button { font:inherit; border:1px solid var(--line); background:var(--card); color:var(--text); border-radius:10px; padding:7px 12px; cursor:pointer; }
   .tabs { display:flex; gap:6px; overflow-x:auto; margin-bottom:10px; }
   .tabs button { border-radius:99px; padding:5px 12px; font-size:13px; font-weight:600; white-space:nowrap; }
@@ -103,7 +104,8 @@
   .main { flex:1; min-width:0; }
   .bulkbar { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px; }
   .bulkbar button { font-size:12px; padding:4px 10px; color:var(--sub); }
-  #filterBtn { font-size:13px; font-weight:600; color:var(--text); display:flex; align-items:center; gap:4px; max-width:70%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #filterBtn { font-size:13px; font-weight:600; color:var(--text); display:flex; align-items:center; gap:4px; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #bulk { white-space:nowrap; flex:none; }
   #filterPanel { display:none; background:var(--card); border:1px solid var(--line); border-radius:14px; padding:10px 12px; margin-bottom:10px; }
   #filterPanel.on { display:block; }
   .fgroup { margin-bottom:8px; } .fgroup:last-child { margin-bottom:0; }
@@ -158,6 +160,9 @@
   #vClose { border:none; background:none; color:var(--text); font-size:20px; padding:2px 6px; }
   #vPages { flex:1; overflow:auto; -webkit-overflow-scrolling:touch; padding:10px 8px calc(16px + env(safe-area-inset-bottom)); }
   #vPages canvas { display:block; width:100%; height:auto; margin:0 auto 10px; background:#fff; border-radius:4px; box-shadow:0 1px 4px rgba(0,0,0,.2); }
+  #vClose2 { position:absolute; left:50%; transform:translateX(-50%); bottom:calc(16px + env(safe-area-inset-bottom)); font-size:13px; font-weight:600;
+             padding:6px 16px; border-radius:99px; background:var(--card); color:var(--text); border:1px solid var(--line); box-shadow:0 2px 10px rgba(0,0,0,.3); }
+  #vPages { padding-bottom:calc(64px + env(safe-area-inset-bottom)) !important; }
   #vPages .vmsg { color:var(--sub); text-align:center; padding:40px 0; }
   #toast { display:none; position:fixed; left:50%; transform:translateX(-50%); bottom:calc(76px + env(safe-area-inset-bottom)); max-width:calc(100% - 32px);
            background:var(--text); color:var(--bg); border-radius:99px; padding:8px 16px; font-size:13px; font-weight:600; box-shadow:0 4px 16px rgba(0,0,0,.25); z-index:10; }
@@ -167,11 +172,11 @@
 </head>
 <body>
 <header>
-  <h1>学校の連絡まとめ<span id="ver" style="font-size:11px;font-weight:400;color:#9aa0a8;margin-left:8px">v3</span></h1>
+  <h1>School Hub<span id="ver" style="font-size:11px;font-weight:400;color:#9aa0a8;margin-left:8px">v4</span></h1>
   <button id="refresh">更新</button>
 </header>
 <div id="newPage"><a id="newPageLink" target="_blank">スマホ用の画面を開く（Google でログイン・ホーム画面に追加できます）</a></div>
-<div class="bulkbar"><button id="filterBtn"></button><button id="bulk">表示中をすべて済にする</button></div>
+<div class="bulkbar"><button id="filterBtn"></button><button id="bulk">まとめて済</button></div>
 <div id="filterPanel"></div>
 <div id="login" style="display:none;text-align:center;padding:24px 0">
   <p>はじめに Google でログインしてください（この端末で 1 回だけ）</p>
@@ -187,6 +192,7 @@
     <button id="vClose" aria-label="閉じる">✕</button>
   </div>
   <div id="vPages"></div>
+  <button id="vClose2">✕ 閉じる</button>
 </div>
 <div id="toast"></div>
 <input type="file" id="pdfInput" accept="application/pdf" style="display:none">
@@ -227,14 +233,14 @@ function renderFilter() {
   items.forEach(it => (it.kids || []).forEach(k => { if (!kids.includes(k)) kids.push(k); }));
   if (filt.kid !== 'all' && !kids.includes(filt.kid) && items.length) filt.kid = 'all';
   const unread = items.filter(it => !it.read).length;
-  const parts = [filt.read === 'open' ? 'チェック済みを隠す' : 'すべて'];
+  const parts = [filt.read === 'open' ? '未チェックのみ' : 'すべて'];
   if (filt.src !== 'all') parts.push(SRC[filt.src]);
   if (filt.kid !== 'all') parts.push(filt.kid);
-  $('#filterBtn').innerHTML = ICON('<path d="M3 5h18M6 12h12M10 19h4"/>') + '絞り込み：' + esc(parts.join('・')) + (unread ? '（未チェック ' + unread + '）' : '');
+  $('#filterBtn').innerHTML = ICON('<path d="M3 5h18M6 12h12M10 19h4"/>') + esc(parts.join('・')) + (unread ? ' <span style="color:var(--sub);font-weight:400">' + unread + '</span>' : '');
   const g = (label, key, opts) => '<div class="fgroup"><div class="fl">' + label + '</div><div class="fo">' +
     opts.map(([v, t]) => '<button data-k="' + key + '" data-v="' + esc(v) + '"' + (filt[key] === v ? ' class="on"' : '') + '>' + esc(t) + '</button>').join('') + '</div></div>';
   $('#filterPanel').innerHTML =
-    g('表示', 'read', [['all', 'すべて'], ['open', 'チェック済みを隠す']]) +
+    g('表示', 'read', [['all', 'すべて'], ['open', '未チェックのみ']]) +
     g('連絡元', 'src', [['all', 'すべて'], ['sakura', 'さくらdays'], ['codmon', 'コドモン'], ['tetoru', 'tetoru']]) +
     (kids.length ? g('子ども', 'kid', [['all', 'すべて']].concat(kids.map(k => [k, k]))) : '');
 }
@@ -415,6 +421,7 @@ function closeViewer() {
   $('#vPages').innerHTML = '';
 }
 $('#vClose').addEventListener('click', closeViewer);
+$('#vClose2').addEventListener('click', closeViewer);
 
 $('#filterBtn').addEventListener('click', () => $('#filterPanel').classList.toggle('on'));
 $('#filterPanel').addEventListener('click', e => {
@@ -502,7 +509,7 @@ if (!window.HUB_STATIC) google.script.run.withSuccessHandler(u => { $('#newPageL
 </script>
 <script>
 (function(){
-  var VER = "v3";
+  var VER = "v4";
   function check(){
     fetch(location.pathname + '?v=' + Date.now(), { cache: 'no-store' }).then(function(r){ return r.text(); }).then(function(t){
       var m = t.match(/id="ver"[^>]*>([^<]+)</);
