@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="連絡まとめ">
+<meta name="robots" content="noindex">
+<title>学校の連絡まとめ</title>
+<script src="https://accounts.google.com/gsi/client" async></script>
+<script>
+(function(){
+  var API = "https://script.google.com/macros/s/AKfycbzQGtKV4lQmDRCNj3lsVqcQ4T4itp-cftw7R9sTcUuC8q43TBd2jBA_c9x65C2jtSlX/exec";
+  var CLIENT_ID = "761786683166-0agdbkrpmnlrj2ah43e7o1d0necl6g69.apps.googleusercontent.com";
+  var SESSION = 'hub_session', CACHE = 'hub_view';
+  window.HUB_STATIC = true;
+  function store(){ try { return window.localStorage; } catch (e) { return null; } }
+  var ls = store();
+  var session = ls ? ls.getItem(SESSION) : null;
+  var waiting = [];
+
+  function post(body) {
+    return fetch(API, { method: 'POST', body: JSON.stringify(body) }).then(function(r){ return r.json(); });
+  }
+  
+  function showLogin() {
+    var box = document.getElementById('login');
+    if (!box) return;
+    box.style.display = 'block';
+    (function wait(){
+      if (!window.google || !google.accounts || !google.accounts.id) { setTimeout(wait, 200); return; }
+      google.accounts.id.initialize({ client_id: CLIENT_ID, callback: onCredential, auto_select: true });
+      google.accounts.id.renderButton(document.getElementById('loginBtn'), { theme: 'filled_blue', size: 'large', text: 'signin_with' });
+      google.accounts.id.prompt();
+    })();
+  }
+  function onCredential(resp) {
+    post({ fn: 'login', idToken: resp.credential }).then(function(j){
+      if (!j.ok) throw new Error(j.error === 'auth' ? 'このアカウントでは使えません' : j.error);
+      session = j.result.session;
+      try { ls.setItem(SESSION, session); } catch (e) {}
+      document.getElementById('login').style.display = 'none';
+      var w = waiting; waiting = [];
+      w.forEach(function(f){ f(); });
+    }).catch(function(e){ document.getElementById('loginMsg').textContent = 'ログインできません：' + e.message; });
+  }
+  function call(fn, args, ok, ng) {
+    var fail = function(err){ if (ng) ng(err); else console.error(err); };
+    var run = function(){
+      post({ session: session, fn: fn, args: args }).then(function(j){
+        if (j.ok) {
+          if (fn === 'getItems' || fn === 'refreshNow') { try { ls.setItem(CACHE, JSON.stringify(j.result)); } catch (e) {} }
+          if (ok) ok(j.result);
+          return;
+        }
+        if (j.error === 'auth') {
+          session = null; try { ls.removeItem(SESSION); } catch (e) {}
+          waiting.push(run); showLogin(); return;
+        }
+        fail(new Error(j.error || 'エラー'));
+      }, fail);
+    };
+    if (!session) { waiting.push(run); showLogin(); return; }
+    run();
+  }
+  function runner(ok, ng) {
+    return new Proxy({}, { get: function(_, name){
+      if (name === 'withSuccessHandler') return function(f){ return runner(f, ng); };
+      if (name === 'withFailureHandler') return function(f){ return runner(ok, f); };
+      return function(){ call(name, Array.prototype.slice.call(arguments), ok, ng); };
+    }});
+  }
+  window.google = window.google || {};
+  window.google.script = { run: runner() };
+  
+  window.HUB_CACHED = function(){ try { return JSON.parse(ls.getItem(CACHE)); } catch (e) { return null; } };
+})();
+</script>
+<style>
+  :root { --bg:#f4f5f7; --card:#fff; --text:#1d1f23; --sub:#6b7079; --line:#e3e5e9; --accent:#2563eb;
+          --sakura:#db2777; --codmon:#0d9488; --tetoru:#7c3aed; --unread:#2563eb; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#121417; --card:#1c1f24; --text:#e8eaed; --sub:#9aa0a8; --line:#2c3037; --accent:#60a5fa;
+            --sakura:#f472b6; --codmon:#2dd4bf; --tetoru:#a78bfa; --unread:#60a5fa; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.55 -apple-system,"Hiragino Sans",sans-serif;
+         padding:12px 16px calc(24px + env(safe-area-inset-bottom)); }
+  header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px; }
+  h1 { font-size:19px; margin:0; }
+  button { font:inherit; border:1px solid var(--line); background:var(--card); color:var(--text); border-radius:10px; padding:7px 12px; cursor:pointer; }
+  .tabs { display:flex; gap:6px; overflow-x:auto; margin-bottom:10px; }
+  .tabs button { border-radius:99px; padding:5px 12px; font-size:13px; font-weight:600; white-space:nowrap; }
+  .tabs button.on { background:var(--text); color:var(--bg); border-color:var(--text); }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:11px 14px; margin-bottom:8px; cursor:pointer; }
+  .card.unread { border-left:4px solid var(--unread); }
+  .top { display:flex; gap:8px; align-items:center; font-size:12px; color:var(--sub); }
+  .badge { font-size:11px; font-weight:700; padding:1px 8px; border-radius:99px; border:1.5px solid currentColor; white-space:nowrap; }
+  .src-sakura { color:var(--sakura); } .src-codmon { color:var(--codmon); } .src-tetoru { color:var(--tetoru); }
+  .from { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .date { margin-left:auto; white-space:nowrap; }
+  .title { font-weight:600; margin-top:4px; }
+  .clip { color:var(--sub); font-size:12px; font-weight:400; }
+  .body { display:none; white-space:pre-wrap; word-break:break-word; margin-top:8px; padding-top:8px; border-top:1px solid var(--line); }
+  .card.open .body { display:block; }
+  .acts { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+  .acts a, .acts button { font-size:13px; font-weight:600; border:1.5px solid var(--accent); color:var(--accent); background:none;
+                          border-radius:99px; padding:4px 12px; text-decoration:none; }
+  .empty { color:var(--sub); text-align:center; padding:24px 0; }
+  #msg { color:var(--sub); font-size:13px; min-height:1em; margin-bottom:6px; }
+  #newPage { display:none; font-size:13px; margin-bottom:10px; }
+  a { color:var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <h1>学校の連絡まとめ</h1>
+  <button id="refresh">更新</button>
+</header>
+<div id="newPage"><a id="newPageLink" target="_blank">スマホ用の画面を開く（Google でログイン・ホーム画面に追加できます）</a></div>
+<div class="tabs" id="tabs">
+  <button data-f="all" class="on">すべて</button>
+  <button data-f="unread">未読</button>
+  <button data-f="sakura">さくらdays</button>
+  <button data-f="codmon">コドモン</button>
+  <button data-f="tetoru">tetoru</button>
+</div>
+<div id="login" style="display:none;text-align:center;padding:24px 0">
+  <p>はじめに Google でログインしてください（この端末で 1 回だけ）</p>
+  <div id="loginBtn" style="display:inline-block"></div>
+  <p id="loginMsg" style="color:#dc2626;font-size:13px"></p>
+</div>
+<div id="msg"></div>
+<div id="list"></div>
+<script>
+const $ = s => document.querySelector(s);
+const SRC = { sakura: 'さくらdays', codmon: 'コドモン', tetoru: 'tetoru' };
+let items = [], filter = 'all';
+
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c])); }
+function linkify(s) { return esc(s).replace(/https?:\/\/[^\s<]+/g, u => '<a href="' + u + '" target="_blank" rel="noopener">' + u + '</a>'); }
+
+function render(list) {
+  if (list) items = list;
+  const shown = items.filter(it => filter === 'all' ? true : filter === 'unread' ? !it.read : it.source === filter);
+  $('#list').innerHTML = shown.length ? shown.map(card).join('') : '<div class="empty">連絡はありません</div>';
+  const unread = items.filter(it => !it.read).length;
+  $('#tabs [data-f="unread"]').textContent = unread ? '未読 ' + unread : '未読';
+}
+
+function card(it) {
+  const files = it.files || [], links = it.links || [];
+  const acts = files.map((f, i) => '<button data-file="' + i + '">📄 ' + esc(f.name) + '</button>')
+    .concat(links.map(l => '<a href="' + esc(l.url) + '" target="_blank" rel="noopener">' + esc(l.name) + '</a>'));
+  return '<div class="card' + (it.read ? '' : ' unread') + '" data-id="' + esc(it.id) + '">' +
+    '<div class="top"><span class="badge src-' + esc(it.source) + '">' + esc(SRC[it.source] || it.source) + '</span>' +
+    '<span class="from">' + esc(it.from) + '</span><span class="date">' + esc(it.date) + '</span></div>' +
+    '<div class="title">' + esc(it.title) + (files.length ? ' <span class="clip">📎' + files.length + '</span>' : '') + '</div>' +
+    '<div class="body">' + linkify(it.body) + (acts.length ? '<div class="acts">' + acts.join('') + '</div>' : '') + '</div></div>';
+}
+
+function load(fn) {
+  $('#msg').textContent = fn === 'refreshNow' ? '取り込み中…' : '読み込み中…';
+  google.script.run.withSuccessHandler(list => { $('#msg').textContent = ''; render(list); })
+    .withFailureHandler(e => $('#msg').textContent = 'エラー：' + e.message)[fn]();
+}
+
+function openFile(id, index) {
+  $('#msg').textContent = 'ファイルを取り出し中…';
+  google.script.run.withSuccessHandler(f => {
+    $('#msg').textContent = '';
+    const bin = atob(f.b64), buf = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+    const url = URL.createObjectURL(new Blob([buf], { type: f.mime }));
+    const a = document.createElement('a');
+    a.href = url; a.target = '_blank'; a.rel = 'noopener'; a.download = f.name;
+    document.body.appendChild(a); a.click(); a.remove();
+  }).withFailureHandler(e => $('#msg').textContent = 'エラー：' + e.message).getFile(id, index);
+}
+
+$('#tabs').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  filter = b.dataset.f;
+  document.querySelectorAll('#tabs button').forEach(x => x.classList.toggle('on', x === b));
+  render();
+});
+
+$('#list').addEventListener('click', e => {
+  const c = e.target.closest('.card'); if (!c) return;
+  const fb = e.target.closest('[data-file]');
+  if (fb) { openFile(c.dataset.id, Number(fb.dataset.file)); return; }
+  if (e.target.closest('a')) return;
+  c.classList.toggle('open');
+  const it = items.find(x => x.id === c.dataset.id);
+  if (it && !it.read) {
+    it.read = true; c.classList.remove('unread'); render();
+    document.querySelector('.card[data-id="' + CSS.escape(it.id) + '"]')?.classList.add('open');
+    google.script.run.withFailureHandler(() => {}).markRead([it.id]);
+  }
+});
+
+$('#refresh').addEventListener('click', () => load('refreshNow'));
+
+{ const c = window.HUB_CACHED && window.HUB_CACHED(); if (c) render(c); }
+load('getItems');
+
+if (!window.HUB_STATIC) google.script.run.withSuccessHandler(u => { $('#newPageLink').href = u; $('#newPage').style.display = 'block'; }).getNewPageUrl();
+</script>
+</body>
+</html>
