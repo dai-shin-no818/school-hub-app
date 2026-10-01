@@ -159,7 +159,7 @@
 </head>
 <body>
 <header>
-  <h1>学校の連絡まとめ</h1>
+  <h1>学校の連絡まとめ<span id="ver" style="font-size:11px;font-weight:400;color:#9aa0a8;margin-left:8px">v2</span></h1>
   <button id="refresh">更新</button>
 </header>
 <div id="newPage"><a id="newPageLink" target="_blank">スマホ用の画面を開く（Google でログイン・ホーム画面に追加できます）</a></div>
@@ -187,7 +187,6 @@
   </div>
   <div id="vPages"></div>
 </div>
-<div style="text-align:center;color:#9aa0a8;font-size:11px;margin:24px 0 8px">画面の版 2026/10/02 06:01</div>
 <div id="toast"></div>
 <input type="file" id="pdfInput" accept="application/pdf" style="display:none">
 <div id="fileBar">
@@ -489,6 +488,19 @@ $('#fileClose').addEventListener('click', () => { $('#fileBar').style.display = 
 load('getItems');
 
 if (!window.HUB_STATIC) google.script.run.withSuccessHandler(u => { $('#newPageLink').href = u; $('#newPage').style.display = 'block'; }).getNewPageUrl();
+</script>
+<script>
+(function(){
+  var VER = "v2";
+  function check(){
+    fetch(location.pathname + '?v=' + Date.now(), { cache: 'no-store' }).then(function(r){ return r.text(); }).then(function(t){
+      var m = t.match(/id="ver"[^>]*>([^<]+)</);
+      if (m && m[1] !== VER) location.reload();
+    }).catch(function(){});
+  }
+  check();
+  document.addEventListener('visibilitychange', function(){ if (document.visibilityState === 'visible') check(); });
+})();
 </script>
 </body>
 </html>
