@@ -44,6 +44,7 @@
       w.forEach(function(f){ f(); });
     }).catch(function(e){ document.getElementById('loginMsg').textContent = 'ログインできません：' + e.message; });
   }
+  var RETRY = ['getItems', 'setRead', 'getPdfData', 'getFile', 'registerPlan', 'refreshNow'];
   function call(fn, args, ok, ng) {
     var fail = function(err){ if (ng) ng(err); else console.error(err); };
     var run = function(){
@@ -58,8 +59,13 @@
           waiting.push(run); showLogin(); return;
         }
         fail(new Error(j.error || 'エラー'));
-      }, fail);
+      }, function(err){
+        
+        if (!retried && RETRY.indexOf(fn) >= 0) { retried = true; setTimeout(run, 2500); return; }
+        fail(err);
+      });
     };
+    var retried = false;
     if (!session) { waiting.push(run); showLogin(); return; }
     run();
   }
@@ -172,7 +178,7 @@
 </head>
 <body>
 <header>
-  <h1>School Hub<span id="ver" style="font-size:11px;font-weight:400;color:#9aa0a8;margin-left:8px">v11</span></h1>
+  <h1>School Hub<span id="ver" style="font-size:11px;font-weight:400;color:#9aa0a8;margin-left:8px">v12</span></h1>
   <button id="refresh">更新</button>
 </header>
 <div id="newPage"><a id="newPageLink" target="_blank">スマホ用の画面を開く（Google でログイン・ホーム画面に追加できます）</a></div>
@@ -626,7 +632,7 @@ if (!window.HUB_STATIC) google.script.run.withSuccessHandler(u => { $('#newPageL
 </script>
 <script>
 (function(){
-  var VER = "v11";
+  var VER = "v12";
   function check(){
     fetch(location.pathname + '?v=' + Date.now(), { cache: 'no-store' }).then(function(r){ return r.text(); }).then(function(t){
       var m = t.match(/id="ver"[^>]*>([^<]+)</);
