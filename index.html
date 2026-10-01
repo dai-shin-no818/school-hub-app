@@ -49,7 +49,7 @@
     var run = function(){
       post({ session: session, fn: fn, args: args }).then(function(j){
         if (j.ok) {
-          if (fn === 'getItems' || fn === 'refreshNow') { try { ls.setItem(CACHE, JSON.stringify(j.result)); } catch (e) {} }
+          if (fn === 'getItems' || fn === 'refreshNow') { try { ls.setItem(CACHE, JSON.stringify(fn === 'refreshNow' ? j.result.items : j.result)); } catch (e) {} }
           if (ok) ok(j.result);
           return;
         }
@@ -170,6 +170,7 @@
 </div>
 <div id="msg"></div>
 <div id="list"></div>
+<div style="text-align:center;color:#9aa0a8;font-size:11px;margin:24px 0 8px">画面の版 2026/10/02 04:51</div>
 <div id="toast"></div>
 <input type="file" id="pdfInput" accept="application/pdf" style="display:none">
 <div id="fileBar">
@@ -293,10 +294,28 @@ function toast(text, kind, ms) {
 }
 
 function load(fn) {
-  $('#msg').textContent = fn === 'refreshNow' ? '取り込み中…' : '読み込み中…';
-  google.script.run.withSuccessHandler(list => { $('#msg').textContent = ''; render(list); showLinked(); })
-    .withFailureHandler(e => $('#msg').textContent = 'エラー：' + e.message)[fn]();
+  const refresh = fn === 'refreshNow';
+  if (refresh) { toast('取り込み中…', '', 0); $('#refresh').disabled = true; $('#refresh').textContent = '更新中…'; }
+  else $('#msg').textContent = '読み込み中…';
+  const done = () => { $('#msg').textContent = ''; $('#refresh').disabled = false; $('#refresh').textContent = '更新'; };
+  google.script.run.withSuccessHandler(res => {
+    done();
+    if (refresh) {
+      render(res.items);
+      toast(res.errors && res.errors.length ? '一部取り込めませんでした：' + res.errors[0] : (res.added ? '新しい連絡 ' + res.added + ' 件' : '新しい連絡はありません'), res.errors && res.errors.length ? 'err' : '');
+    } else render(res);
+    showLinked();
+  }).withFailureHandler(e => { done(); toast('エラー：' + e.message, 'err'); })[fn]();
 }
+
+
+document.addEventListener('click', e => {
+  const a = e.target.closest('a[href^="https://"]');
+  if (!a || !(navigator.standalone || matchMedia('(display-mode: standalone)').matches)) return;
+  if (!/iPhone|iPad/.test(navigator.userAgent)) return;
+  e.preventDefault();
+  location.href = 'x-safari-' + a.href;
+}, true);
 
 
 function openFile(id, index, btn) {
