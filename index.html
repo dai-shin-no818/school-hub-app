@@ -78,10 +78,12 @@
 </script>
 <style>
   :root { --bg:#f4f5f7; --card:#fff; --text:#1d1f23; --sub:#6b7079; --line:#e3e5e9; --accent:#2563eb;
-          --sakura:#db2777; --codmon:#0d9488; --tetoru:#7c3aed; --unread:#2563eb; }
+          --sakura:#db2777; --codmon:#0d9488; --tetoru:#7c3aed; --unread:#2563eb;
+          --cal:#8b6f5a; --todo:#5e7a66; }
   @media (prefers-color-scheme: dark) {
     :root { --bg:#121417; --card:#1c1f24; --text:#e8eaed; --sub:#9aa0a8; --line:#2c3037; --accent:#60a5fa;
-            --sakura:#f472b6; --codmon:#2dd4bf; --tetoru:#a78bfa; --unread:#60a5fa; }
+            --sakura:#f472b6; --codmon:#2dd4bf; --tetoru:#a78bfa; --unread:#60a5fa;
+            --cal:#b39d8c; --todo:#93ab9a; }
   }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--text); font:15px/1.55 -apple-system,"Hiragino Sans",sans-serif;
@@ -108,8 +110,8 @@
   .kid { font-size:11px; font-weight:700; padding:1px 8px; border-radius:99px; background:var(--line); color:var(--text); }
   #kidTabs:empty { display:none; }
   .ic { width:1.05em; height:1.05em; vertical-align:-0.15em; margin-right:3px; }
-  .ptag { font-size:11px; font-weight:700; padding:1px 8px; border-radius:99px; border:1.5px solid currentColor; }
-  .ptag.ev { color:#ea580c; } .ptag.td { color:#16a34a; } .ptag.ok { color:var(--sub); }
+  .ptag { font-size:11px; font-weight:600; padding:1px 8px; border-radius:99px; border:1px solid currentColor; }
+  .ptag.ev { color:var(--cal); } .ptag.td { color:var(--todo); } .ptag.ok { color:var(--sub); }
   .plans { margin-top:10px; border-top:1px dashed var(--line); padding-top:8px; }
   .plans h3 { font-size:13px; margin:0 0 6px; color:var(--sub); display:flex; justify-content:space-between; align-items:center; }
   .plans h3 button { font-size:12px; padding:2px 10px; }
@@ -118,7 +120,7 @@
   .plan input { font:inherit; font-size:14px; padding:5px 8px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--text); }
   .plan input.t { flex:1; min-width:10em; }
   .plan .kind { font-size:12px; font-weight:700; border-radius:99px; padding:3px 10px; }
-  .plan .kind.event { color:#ea580c; border-color:#ea580c; } .plan .kind.todo { color:#16a34a; border-color:#16a34a; }
+  .plan .kind.event { color:var(--cal); border-color:var(--cal); } .plan .kind.todo { color:var(--todo); border-color:var(--todo); }
   .plan .reg { margin-left:auto; font-weight:700; background:var(--accent); color:#fff; border-color:var(--accent); }
   .plan .note { font-size:12px; color:var(--sub); }
   .plan.done { opacity:.55; }
