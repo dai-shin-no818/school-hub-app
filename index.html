@@ -172,7 +172,7 @@
 </head>
 <body>
 <header>
-  <h1>School Hub<span id="ver" style="font-size:11px;font-weight:400;color:#9aa0a8;margin-left:8px">v7</span></h1>
+  <h1>School Hub<span id="ver" style="font-size:11px;font-weight:400;color:#9aa0a8;margin-left:8px">v8</span></h1>
   <button id="refresh">更新</button>
 </header>
 <div id="newPage"><a id="newPageLink" target="_blank">スマホ用の画面を開く（Google でログイン・ホーム画面に追加できます）</a></div>
@@ -270,9 +270,13 @@ function card(it) {
 }
 
 
+
+const TODAY = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
+const livePlan = (p, i, reg) => reg[i] || !p.date || p.date >= TODAY;
+
 function planTags(it) {
   const items = (it.plan && it.plan.items) || [], reg = it.registered || {};
-  const left = items.map((p, i) => ({ p, i })).filter(x => !reg[x.i]);
+  const left = items.map((p, i) => ({ p, i })).filter(x => !reg[x.i] && livePlan(x.p, x.i, reg));
   const ev = left.filter(x => x.p.kind === 'event').length, td = left.filter(x => x.p.kind === 'todo').length;
   if (ev || td) return (ev ? '<span class="ptag ev">' + IC.cal + 'Calendar ' + ev + '</span>' : '') + (td ? '<span class="ptag td">' + IC.todo + 'Todo ' + td + '</span>' : '');
   return items.length ? '<span class="ptag ok">登録済み</span>' : '';
@@ -283,8 +287,8 @@ function plansHtml(it) {
   const items = (it.plan && it.plan.items) || [], reg = it.registered || {};
   const head = '<h3>Calendar・Todo の候補<button data-replan="1">' + (it.plan && !it.plan.skipped ? 'AI で読み直す' : 'AI で読む') + '</button></h3>';
   if (!it.plan || it.plan.skipped) return '<div class="plans">' + head + '<div class="note">' + (it.plan ? '古い連絡なので読んでいません' : 'まだ読んでいません（30 分以内に自動で読みます）') + '</div></div>';
-  if (!items.length) return '<div class="plans">' + head + '<div class="note">登録が必要なものは見つかりませんでした</div></div>';
-  return '<div class="plans">' + head + items.map((p, i) => '<div class="plan' + (reg[i] ? ' done' : '') + '" data-plan="' + i + '">' +
+  if (!items.some((p, i) => livePlan(p, i, reg))) return '<div class="plans">' + head + '<div class="note">登録が必要なものは見つかりませんでした</div></div>';
+  return '<div class="plans">' + head + items.map((p, i) => !livePlan(p, i, reg) ? '' : '<div class="plan' + (reg[i] ? ' done' : '') + '" data-plan="' + i + '">' +
     '<div class="r"><button class="kind ' + esc(p.kind) + '" data-kind="' + esc(p.kind) + '">' + (p.kind === 'event' ? IC.cal + 'Calendar（FAMILY）' : IC.todo + 'Todo（SCHOOL）') + '</button>' +
     (reg[i] ? '<span class="note">登録済み</span>' : '<button class="reg">登録</button>') + '</div>' +
     '<div class="r"><input class="t" value="' + esc(p.title) + '"></div>' +
@@ -408,6 +412,36 @@ function loadPdfJs() {
   return pdfjsLoading;
 }
 let viewerToken = 0;
+
+function pdfDb() {
+  return new Promise((ok, ng) => {
+    const r = indexedDB.open('school_hub', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('pdf');
+    r.onsuccess = () => ok(r.result);
+    r.onerror = () => ng(r.error);
+  });
+}
+async function pdfCacheGet(key) {
+  try {
+    const db = await pdfDb();
+    return await new Promise(ok => { const q = db.transaction('pdf').objectStore('pdf').get(key); q.onsuccess = () => ok(q.result || null); q.onerror = () => ok(null); });
+  } catch (e) { return null; }
+}
+async function pdfCachePut(key, v) {
+  try {
+    const db = await pdfDb();
+    const st = db.transaction('pdf', 'readwrite').objectStore('pdf');
+    st.put(Object.assign({ at: Date.now() }, v), key);
+    
+    const all = st.getAll(), keys = st.getAllKeys();
+    let n = 0;
+    const done = () => {
+      if (++n < 2 || keys.result.length <= 30) return;
+      keys.result.map((k, i) => [k, all.result[i].at]).sort((a, b) => a[1] - b[1]).slice(0, keys.result.length - 30).forEach(([k]) => st.delete(k));
+    };
+    all.onsuccess = done; keys.onsuccess = done;
+  } catch (e) {}
+}
 function openViewer(id, index) {
   const it = items.find(x => x.id === id), f = it && it.files[index];
   const token = ++viewerToken;
@@ -429,14 +463,25 @@ function openViewer(id, index) {
     }
     return { url: first.url, size: first.size, chunks };
   };
-  Promise.all([loadPdfJs(), fetchAll()])
+  const key = id + '#' + index;
+  const getBytes = async () => {
+    const hit = await pdfCacheGet(key);
+    if (hit) return hit;
+    const d = await fetchAll();
+    if (!d) return null;
+    const buf = new Uint8Array(d.size);
+    let pos = 0;
+    d.chunks.forEach(c => { const bin = atob(c); for (let i = 0; i < bin.length; i++) buf[pos++] = bin.charCodeAt(i); });
+    const v = { url: d.url, buf };
+    pdfCachePut(key, v);
+    return v;
+  };
+  Promise.all([loadPdfJs(), getBytes()])
     .then(([lib, d]) => {
       if (token !== viewerToken || !d) return;
       if (f) f.url = d.url;
       $('#vDrive').href = d.url; $('#vDrive').style.display = '';
-      const buf = new Uint8Array(d.size);
-      let pos = 0;
-      d.chunks.forEach(c => { const bin = atob(c); for (let i = 0; i < bin.length; i++) buf[pos++] = bin.charCodeAt(i); });
+      const buf = d.buf.slice();
       return lib.getDocument({ data: buf }).promise.then(async pdf => {
         $('#vPages').innerHTML = '';
         const w = $('#vPages').clientWidth - 16, ratio = Math.min(window.devicePixelRatio || 1, 2);
@@ -549,7 +594,7 @@ if (!window.HUB_STATIC) google.script.run.withSuccessHandler(u => { $('#newPageL
 </script>
 <script>
 (function(){
-  var VER = "v7";
+  var VER = "v8";
   function check(){
     fetch(location.pathname + '?v=' + Date.now(), { cache: 'no-store' }).then(function(r){ return r.text(); }).then(function(t){
       var m = t.match(/id="ver"[^>]*>([^<]+)</);
