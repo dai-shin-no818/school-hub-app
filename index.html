@@ -172,7 +172,7 @@
 </head>
 <body>
 <header>
-  <h1>School Hub<span id="ver" style="font-size:11px;font-weight:400;color:#9aa0a8;margin-left:8px">v9</span></h1>
+  <h1>School Hub<span id="ver" style="font-size:11px;font-weight:400;color:#9aa0a8;margin-left:8px">v10</span></h1>
   <button id="refresh">更新</button>
 </header>
 <div id="newPage"><a id="newPageLink" target="_blank">スマホ用の画面を開く（Google でログイン・ホーム画面に追加できます）</a></div>
@@ -550,7 +550,7 @@ $('#list').addEventListener('click', e => {
   if (e.target.closest('[data-replan]')) {
     toast('AI で読んでいます…（1 分ほど）', '', 0);
     google.script.run.withSuccessHandler(plan => { toast('読み終わりました'); it.plan = plan; it.registered = {}; render(); })
-      .withFailureHandler(err => toast(/上限/.test(err.message) ? err.message : '読めませんでした：' + err.message, 'err')).replan(id);
+      .withFailureHandler(err => toast(/上限|混み合/.test(err.message) ? err.message : '読めませんでした：' + err.message, 'err')).replan(id);
     return;
   }
   const pl = e.target.closest('.plan');
@@ -583,7 +583,15 @@ $('#list').addEventListener('click', e => {
 
 $('#bulk').addEventListener('click', () => {
   const ids = shownItems().filter(it => !it.read).map(it => it.id);
-  if (ids.length) setRead(ids, true);
+  if (!ids.length) return;
+  setRead(ids, true);
+  
+  const t = $('#toast');
+  clearTimeout(toastTimer);
+  t.className = ''; t.style.display = 'block';
+  t.innerHTML = ids.length + ' 件を済にしました <button id="undoBulk" style="margin-left:10px;font-size:13px;font-weight:700;padding:3px 10px;border-radius:99px;border:none;background:var(--bg);color:var(--text)">元に戻す</button>';
+  $('#undoBulk').addEventListener('click', () => { setRead(ids, false); toast('元に戻しました'); });
+  toastTimer = setTimeout(() => { t.style.display = 'none'; }, 7000);
 });
 
 $('#refresh').addEventListener('click', () => load('refreshNow'));
@@ -617,7 +625,7 @@ if (!window.HUB_STATIC) google.script.run.withSuccessHandler(u => { $('#newPageL
 </script>
 <script>
 (function(){
-  var VER = "v9";
+  var VER = "v10";
   function check(){
     fetch(location.pathname + '?v=' + Date.now(), { cache: 'no-store' }).then(function(r){ return r.text(); }).then(function(t){
       var m = t.match(/id="ver"[^>]*>([^<]+)</);
