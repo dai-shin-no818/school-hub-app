@@ -249,9 +249,24 @@ function setRead(ids, read) {
   google.script.run.withFailureHandler(e => $('#msg').textContent = '記録できませんでした：' + e.message).setRead(ids, read);
 }
 
+
+function showLinked() {
+  const m = location.hash.match(/item=([^&]+)/);
+  if (!m) return;
+  const id = decodeURIComponent(m[1]);
+  if (!items.some(it => it.id === id)) return;
+  filter = 'all';
+  document.querySelectorAll('#tabs button').forEach(x => x.classList.toggle('on', x.dataset.f === 'all'));
+  opened.add(id);
+  render();
+  const el = document.querySelector('.card[data-id="' + CSS.escape(id) + '"]');
+  if (el) el.scrollIntoView({ block: 'start' });
+}
+window.addEventListener('hashchange', showLinked);
+
 function load(fn) {
   $('#msg').textContent = fn === 'refreshNow' ? '取り込み中…' : '読み込み中…';
-  google.script.run.withSuccessHandler(list => { $('#msg').textContent = ''; render(list); })
+  google.script.run.withSuccessHandler(list => { $('#msg').textContent = ''; render(list); showLinked(); })
     .withFailureHandler(e => $('#msg').textContent = 'エラー：' + e.message)[fn]();
 }
 
