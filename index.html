@@ -107,6 +107,20 @@
   .kids { display:flex; gap:4px; flex-wrap:wrap; margin-top:4px; }
   .kid { font-size:11px; font-weight:700; padding:1px 8px; border-radius:99px; background:var(--line); color:var(--text); }
   #kidTabs:empty { display:none; }
+  .ptag { font-size:11px; font-weight:700; padding:1px 8px; border-radius:99px; border:1.5px solid currentColor; }
+  .ptag.ev { color:#ea580c; } .ptag.td { color:#16a34a; } .ptag.ok { color:var(--sub); }
+  .plans { margin-top:10px; border-top:1px dashed var(--line); padding-top:8px; }
+  .plans h3 { font-size:13px; margin:0 0 6px; color:var(--sub); display:flex; justify-content:space-between; align-items:center; }
+  .plans h3 button { font-size:12px; padding:2px 10px; }
+  .plan { border:1px solid var(--line); border-radius:10px; padding:8px; margin-bottom:6px; display:flex; flex-direction:column; gap:6px; }
+  .plan .r { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+  .plan input { font:inherit; font-size:14px; padding:5px 8px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--text); }
+  .plan input.t { flex:1; min-width:10em; }
+  .plan .kind { font-size:12px; font-weight:700; border-radius:99px; padding:3px 10px; }
+  .plan .kind.event { color:#ea580c; border-color:#ea580c; } .plan .kind.todo { color:#16a34a; border-color:#16a34a; }
+  .plan .reg { margin-left:auto; font-weight:700; background:var(--accent); color:#fff; border-color:var(--accent); }
+  .plan .note { font-size:12px; color:var(--sub); }
+  .plan.done { opacity:.55; }
   .date { margin-left:auto; white-space:nowrap; }
   .title { font-weight:600; margin-top:4px; }
   .clip { color:var(--sub); font-size:12px; font-weight:400; }
@@ -198,9 +212,34 @@ function card(it) {
     '<div class="top"><span class="badge src-' + esc(it.source) + '">' + esc(SRC[it.source] || it.source) + '</span>' +
     '<span class="from">' + esc(it.from) + '</span><span class="date">' + esc(it.date) + '</span></div>' +
     '<div class="title">' + esc(it.title) + (files.length ? ' <span class="clip">📎' + files.length + '</span>' : '') + '</div>' +
-    ((it.kids || []).length ? '<div class="kids">' + it.kids.map(k => '<span class="kid">' + esc(k) + '</span>').join('') + '</div>' : '') +
+    '<div class="kids">' + (it.kids || []).map(k => '<span class="kid">' + esc(k) + '</span>').join('') + planTags(it) + '</div>' +
     '</div></div>' +
-    '<div class="body">' + linkify(it.body) + (acts.length ? '<div class="acts">' + acts.join('') + '</div>' : '') + '</div></div>';
+    '<div class="body">' + linkify(it.body) + (acts.length ? '<div class="acts">' + acts.join('') + '</div>' : '') + plansHtml(it) + '</div></div>';
+}
+
+
+function planTags(it) {
+  const items = (it.plan && it.plan.items) || [], reg = it.registered || {};
+  const left = items.map((p, i) => ({ p, i })).filter(x => !reg[x.i]);
+  const ev = left.filter(x => x.p.kind === 'event').length, td = left.filter(x => x.p.kind === 'todo').length;
+  if (ev || td) return (ev ? '<span class="ptag ev">📅 予定 ' + ev + '</span>' : '') + (td ? '<span class="ptag td">✅ やること ' + td + '</span>' : '');
+  return items.length ? '<span class="ptag ok">登録済み</span>' : '';
+}
+
+
+function plansHtml(it) {
+  const items = (it.plan && it.plan.items) || [], reg = it.registered || {};
+  const head = '<h3>予定・やることの候補<button data-replan="1">' + (it.plan && !it.plan.skipped ? 'AI で読み直す' : 'AI で読む') + '</button></h3>';
+  if (!it.plan || it.plan.skipped) return '<div class="plans">' + head + '<div class="note">' + (it.plan ? '古い連絡なので読んでいません' : 'まだ読んでいません（30 分以内に自動で読みます）') + '</div></div>';
+  if (!items.length) return '<div class="plans">' + head + '<div class="note">登録が必要なものは見つかりませんでした</div></div>';
+  return '<div class="plans">' + head + items.map((p, i) => '<div class="plan' + (reg[i] ? ' done' : '') + '" data-plan="' + i + '">' +
+    '<div class="r"><button class="kind ' + esc(p.kind) + '" data-kind="' + esc(p.kind) + '">' + (p.kind === 'event' ? '📅 予定（FAMILY）' : '✅ やること（SCHOOL）') + '</button>' +
+    (reg[i] ? '<span class="note">登録済み</span>' : '<button class="reg">登録</button>') + '</div>' +
+    '<div class="r"><input class="t" value="' + esc(p.title) + '"></div>' +
+    '<div class="r"><input class="d" type="date" value="' + esc(p.date) + '">' +
+    '<input class="s" type="time" value="' + esc(p.start) + '"' + (p.kind === 'todo' ? ' style="display:none"' : '') + '>' +
+    '<input class="e" type="time" value="' + esc(p.end) + '"' + (p.kind === 'todo' ? ' style="display:none"' : '') + '></div>' +
+    (p.note ? '<div class="note">' + esc(p.note) + '</div>' : '') + '</div>').join('') + '</div>';
 }
 
 
@@ -259,6 +298,34 @@ $('#list').addEventListener('click', e => {
   if (e.target.classList.contains('chk')) { setRead([id], e.target.checked); return; }
   const fb = e.target.closest('[data-file]');
   if (fb) { openFile(id, Number(fb.dataset.file)); return; }
+  const it = items.find(x => x.id === id);
+  if (e.target.closest('[data-replan]')) {
+    $('#msg').textContent = 'AI で読んでいます…';
+    google.script.run.withSuccessHandler(plan => { $('#msg').textContent = ''; it.plan = plan; it.registered = {}; render(); })
+      .withFailureHandler(err => $('#msg').textContent = 'エラー：' + err.message).replan(id);
+    return;
+  }
+  const pl = e.target.closest('.plan');
+  if (pl) {
+    const i = Number(pl.dataset.plan), p = it.plan.items[i];
+    const kb = e.target.closest('.kind');
+    if (kb) {
+      
+      Object.assign(p, { title: pl.querySelector('.t').value, date: pl.querySelector('.d').value, start: pl.querySelector('.s').value, end: pl.querySelector('.e').value });
+      p.kind = p.kind === 'event' ? 'todo' : 'event'; render(); return;
+    }
+    if (e.target.closest('.reg')) {
+      const q = { kind: p.kind, title: pl.querySelector('.t').value.trim(), date: pl.querySelector('.d').value,
+        start: pl.querySelector('.s').value, end: pl.querySelector('.e').value, note: p.note };
+      if (!q.title) { $('#msg').textContent = '題名を入れてください'; return; }
+      if (q.kind === 'event' && !q.date) { $('#msg').textContent = '予定の日付を入れてください'; return; }
+      Object.assign(p, q);
+      $('#msg').textContent = '登録中…';
+      google.script.run.withSuccessHandler(reg => { $('#msg').textContent = (q.kind === 'event' ? 'カレンダー FAMILY' : 'ToDo SCHOOL') + ' に登録しました'; it.registered = reg; render(); })
+        .withFailureHandler(err => $('#msg').textContent = 'エラー：' + err.message).registerPlan(id, i, q);
+    }
+    return;
+  }
   if (e.target.closest('a')) return;
   if (opened.has(id)) opened.delete(id); else opened.add(id);
   c.classList.toggle('open');
