@@ -172,7 +172,7 @@
 </head>
 <body>
 <header>
-  <h1>School Hub<span id="ver" style="font-size:11px;font-weight:400;color:#9aa0a8;margin-left:8px">v8</span></h1>
+  <h1>School Hub<span id="ver" style="font-size:11px;font-weight:400;color:#9aa0a8;margin-left:8px">v9</span></h1>
   <button id="refresh">更新</button>
 </header>
 <div id="newPage"><a id="newPageLink" target="_blank">スマホ用の画面を開く（Google でログイン・ホーム画面に追加できます）</a></div>
@@ -246,7 +246,7 @@ function renderFilter() {
 }
 
 function render(list) {
-  if (list) { items = list; applyPending(true); }
+  if (list) { items = list; applyPending(true); setTimeout(prefetchPdfs, 3000); }
   const shown = shownItems();
   $('#list').innerHTML = shown.length ? shown.map(card).join('') : '<div class="empty">連絡はありません</div>';
   renderFilter();
@@ -412,6 +412,29 @@ function loadPdfJs() {
   return pdfjsLoading;
 }
 let viewerToken = 0;
+
+let prefetched = false;
+async function prefetchPdfs() {
+  if (prefetched) return;
+  prefetched = true;
+  const since = new Date(Date.now() + 9 * 3600e3 - 14 * 864e5).toISOString().slice(0, 10);
+  const todo = [];
+  items.filter(it => it.date.slice(0, 10) >= since).forEach(it => (it.files || []).forEach((f, i) => todo.push([it.id, i])));
+  for (const [id, i] of todo.slice(0, 10)) {
+    const key = id + '#' + i;
+    if (await pdfCacheGet(key)) continue;
+    try {
+      const get = part => new Promise((ok, ng) => google.script.run.withSuccessHandler(ok).withFailureHandler(ng).getPdfData(id, i, part));
+      const first = await get(0);
+      const chunks = [first.b64];
+      for (let p = 1; p < first.parts; p++) chunks.push((await get(p)).b64);
+      const buf = new Uint8Array(first.size);
+      let pos = 0;
+      chunks.forEach(c => { const bin = atob(c); for (let k = 0; k < bin.length; k++) buf[pos++] = bin.charCodeAt(k); });
+      await pdfCachePut(key, { url: first.url, buf });
+    } catch (e) {   }
+  }
+}
 
 function pdfDb() {
   return new Promise((ok, ng) => {
@@ -594,7 +617,7 @@ if (!window.HUB_STATIC) google.script.run.withSuccessHandler(u => { $('#newPageL
 </script>
 <script>
 (function(){
-  var VER = "v8";
+  var VER = "v9";
   function check(){
     fetch(location.pathname + '?v=' + Date.now(), { cache: 'no-store' }).then(function(r){ return r.text(); }).then(function(t){
       var m = t.match(/id="ver"[^>]*>([^<]+)</);
