@@ -172,7 +172,7 @@
 </head>
 <body>
 <header>
-  <h1>School Hub<span id="ver" style="font-size:11px;font-weight:400;color:#9aa0a8;margin-left:8px">v10</span></h1>
+  <h1>School Hub<span id="ver" style="font-size:11px;font-weight:400;color:#9aa0a8;margin-left:8px">v11</span></h1>
   <button id="refresh">更新</button>
 </header>
 <div id="newPage"><a id="newPageLink" target="_blank">スマホ用の画面を開く（Google でログイン・ホーム画面に追加できます）</a></div>
@@ -285,7 +285,8 @@ function planTags(it) {
 
 function plansHtml(it) {
   const items = (it.plan && it.plan.items) || [], reg = it.registered || {};
-  const head = '<h3>Calendar・Todo の候補<button data-replan="1">' + (it.plan && !it.plan.skipped ? 'AI で読み直す' : 'AI で読む') + '</button></h3>';
+  const by = it.plan && it.plan.model ? '<span style="font-size:11px;font-weight:400;margin-left:6px">' + (/lite/.test(it.plan.model) ? 'Flash-Lite' : 'Flash') + '</span>' : '';
+  const head = '<h3><span>Calendar・Todo の候補' + by + '</span><button data-replan="1">' + (it.plan && !it.plan.skipped ? 'AI で読み直す' : 'AI で読む') + '</button></h3>';
   if (!it.plan || it.plan.skipped) return '<div class="plans">' + head + '<div class="note">' + (it.plan ? '古い連絡なので読んでいません' : 'まだ読んでいません（30 分以内に自動で読みます）') + '</div></div>';
   if (!items.some((p, i) => livePlan(p, i, reg))) return '<div class="plans">' + head + '<div class="note">登録が必要なものは見つかりませんでした</div></div>';
   return '<div class="plans">' + head + items.map((p, i) => !livePlan(p, i, reg) ? '' : '<div class="plan' + (reg[i] ? ' done' : '') + '" data-plan="' + i + '">' +
@@ -625,7 +626,7 @@ if (!window.HUB_STATIC) google.script.run.withSuccessHandler(u => { $('#newPageL
 </script>
 <script>
 (function(){
-  var VER = "v10";
+  var VER = "v11";
   function check(){
     fetch(location.pathname + '?v=' + Date.now(), { cache: 'no-store' }).then(function(r){ return r.text(); }).then(function(t){
       var m = t.match(/id="ver"[^>]*>([^<]+)</);
