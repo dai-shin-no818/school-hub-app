@@ -172,7 +172,7 @@
 </head>
 <body>
 <header>
-  <h1>School Hub<span id="ver" style="font-size:11px;font-weight:400;color:#9aa0a8;margin-left:8px">v6</span></h1>
+  <h1>School Hub<span id="ver" style="font-size:11px;font-weight:400;color:#9aa0a8;margin-left:8px">v7</span></h1>
   <button id="refresh">更新</button>
 </header>
 <div id="newPage"><a id="newPageLink" target="_blank">スマホ用の画面を開く（Google でログイン・ホーム画面に追加できます）</a></div>
@@ -417,13 +417,26 @@ function openViewer(id, index) {
   $('#vPages').innerHTML = '<div class="vmsg">PDF を読み込んでいます…</div>';
   $('#viewer').classList.add('on');
   document.body.style.overflow = 'hidden';
-  Promise.all([loadPdfJs(), new Promise((ok, ng) => google.script.run.withSuccessHandler(ok).withFailureHandler(ng).getPdfData(id, index))])
+  
+  const getPart = part => new Promise((ok, ng) => google.script.run.withSuccessHandler(ok).withFailureHandler(ng).getPdfData(id, index, part));
+  const fetchAll = async () => {
+    const first = await getPart(0);
+    const chunks = [first.b64];
+    for (let p = 1; p < first.parts; p++) {
+      if (token !== viewerToken) return null;
+      $('#vPages').innerHTML = '<div class="vmsg">PDF を読み込んでいます… ' + p + '/' + first.parts + '</div>';
+      chunks.push((await getPart(p)).b64);
+    }
+    return { url: first.url, size: first.size, chunks };
+  };
+  Promise.all([loadPdfJs(), fetchAll()])
     .then(([lib, d]) => {
-      if (token !== viewerToken) return;
+      if (token !== viewerToken || !d) return;
       if (f) f.url = d.url;
       $('#vDrive').href = d.url; $('#vDrive').style.display = '';
-      const bin = atob(d.b64), buf = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+      const buf = new Uint8Array(d.size);
+      let pos = 0;
+      d.chunks.forEach(c => { const bin = atob(c); for (let i = 0; i < bin.length; i++) buf[pos++] = bin.charCodeAt(i); });
       return lib.getDocument({ data: buf }).promise.then(async pdf => {
         $('#vPages').innerHTML = '';
         const w = $('#vPages').clientWidth - 16, ratio = Math.min(window.devicePixelRatio || 1, 2);
@@ -536,7 +549,7 @@ if (!window.HUB_STATIC) google.script.run.withSuccessHandler(u => { $('#newPageL
 </script>
 <script>
 (function(){
-  var VER = "v6";
+  var VER = "v7";
   function check(){
     fetch(location.pathname + '?v=' + Date.now(), { cache: 'no-store' }).then(function(r){ return r.text(); }).then(function(t){
       var m = t.match(/id="ver"[^>]*>([^<]+)</);
