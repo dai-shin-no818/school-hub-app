@@ -139,9 +139,13 @@
   #fileBar { display:none; position:fixed; left:12px; right:12px; bottom:calc(12px + env(safe-area-inset-bottom)); gap:8px; align-items:center;
              background:var(--card); border:1px solid var(--line); border-radius:14px; padding:10px 12px; box-shadow:0 4px 20px rgba(0,0,0,.25); }
   #fileName { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px; }
-  #fileOpen, #fileSave { font-size:14px; font-weight:700; border:1.5px solid var(--accent); color:var(--accent); background:none;
+  #fileOpen { font-size:14px; font-weight:700; border:1.5px solid var(--accent); color:var(--accent); background:none;
                          border-radius:99px; padding:5px 14px; text-decoration:none; }
   #fileClose { border:none; background:none; color:var(--sub); padding:4px 6px; }
+  #toast { display:none; position:fixed; left:50%; transform:translateX(-50%); bottom:calc(76px + env(safe-area-inset-bottom)); max-width:calc(100% - 32px);
+           background:var(--text); color:var(--bg); border-radius:99px; padding:8px 16px; font-size:13px; font-weight:600; box-shadow:0 4px 16px rgba(0,0,0,.25); z-index:10; }
+  #toast.err { background:#b91c1c; color:#fff; border-radius:12px; }
+  button:disabled { opacity:.6; }
 </style>
 </head>
 <body>
@@ -166,10 +170,10 @@
 </div>
 <div id="msg"></div>
 <div id="list"></div>
+<div id="toast"></div>
 <div id="fileBar">
   <span id="fileName"></span>
-  <a id="fileOpen" target="_blank" rel="noopener">開く</a>
-  <button id="fileSave">保存</button>
+  <a id="fileOpen" target="_blank" rel="noopener">開く（ドライブ）</a>
   <button id="fileClose" aria-label="閉じる">✕</button>
 </div>
 <script>
@@ -257,7 +261,7 @@ function plansHtml(it) {
 function setRead(ids, read) {
   items.forEach(it => { if (ids.includes(it.id)) it.read = read; });
   render();
-  google.script.run.withFailureHandler(e => $('#msg').textContent = '記録できませんでした：' + e.message).setRead(ids, read);
+  google.script.run.withFailureHandler(e => toast('記録できませんでした：' + e.message, 'err')).setRead(ids, read);
 }
 
 
@@ -275,6 +279,16 @@ function showLinked() {
 }
 window.addEventListener('hashchange', showLinked);
 
+
+let toastTimer = null;
+function toast(text, kind, ms) {
+  const t = $('#toast');
+  clearTimeout(toastTimer);
+  if (!text) { t.style.display = 'none'; return; }
+  t.textContent = text; t.className = kind === 'err' ? 'err' : ''; t.style.display = 'block';
+  if (ms !== 0) toastTimer = setTimeout(() => { t.style.display = 'none'; }, ms || (kind === 'err' ? 8000 : 3000));
+}
+
 function load(fn) {
   $('#msg').textContent = fn === 'refreshNow' ? '取り込み中…' : '読み込み中…';
   google.script.run.withSuccessHandler(list => { $('#msg').textContent = ''; render(list); showLinked(); })
@@ -282,33 +296,17 @@ function load(fn) {
 }
 
 
-let ready = null;
-function openFile(id, index) {
+function openFile(id, index, btn) {
   $('#fileBar').style.display = 'none';
-  $('#msg').textContent = 'ファイルを取り出し中…';
+  toast('PDF を準備中…', '', 0);
+  if (btn) btn.disabled = true;
   google.script.run.withSuccessHandler(f => {
-    $('#msg').textContent = '';
-    const bin = atob(f.b64), buf = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
-    const blob = new Blob([buf], { type: f.mime });
-    if (ready) URL.revokeObjectURL(ready.url);
-    ready = { name: f.name, blob, url: URL.createObjectURL(blob), file: new File([blob], f.name, { type: f.mime }) };
+    toast('');
+    if (btn) btn.disabled = false;
     $('#fileName').textContent = f.name;
-    $('#fileOpen').href = ready.url;
+    $('#fileOpen').href = f.url;
     $('#fileBar').style.display = 'flex';
-  }).withFailureHandler(e => $('#msg').textContent = 'エラー：' + e.message).getFile(id, index);
-}
-
-function saveReady() {
-  if (!ready) return;
-  
-  if (navigator.canShare && navigator.share && navigator.canShare({ files: [ready.file] })) {
-    navigator.share({ files: [ready.file] }).catch(() => {});
-    return;
-  }
-  const a = document.createElement('a');
-  a.href = ready.url; a.download = ready.name;
-  document.body.appendChild(a); a.click(); a.remove();
+  }).withFailureHandler(e => { if (btn) btn.disabled = false; toast('PDF を開けませんでした：' + e.message, 'err'); }).getFile(id, index);
 }
 
 ['#tabs', '#kidTabs'].forEach(sel => $(sel).addEventListener('click', e => {
@@ -323,12 +321,12 @@ $('#list').addEventListener('click', e => {
   const id = c.dataset.id;
   if (e.target.classList.contains('chk')) { setRead([id], e.target.checked); return; }
   const fb = e.target.closest('[data-file]');
-  if (fb) { openFile(id, Number(fb.dataset.file)); return; }
+  if (fb) { openFile(id, Number(fb.dataset.file), fb); return; }
   const it = items.find(x => x.id === id);
   if (e.target.closest('[data-replan]')) {
-    $('#msg').textContent = 'AI で読んでいます…';
-    google.script.run.withSuccessHandler(plan => { $('#msg').textContent = ''; it.plan = plan; it.registered = {}; render(); })
-      .withFailureHandler(err => $('#msg').textContent = 'エラー：' + err.message).replan(id);
+    toast('AI で読んでいます…（1 分ほど）', '', 0);
+    google.script.run.withSuccessHandler(plan => { toast('読み終わりました'); it.plan = plan; it.registered = {}; render(); })
+      .withFailureHandler(err => toast('読めませんでした：' + err.message, 'err')).replan(id);
     return;
   }
   const pl = e.target.closest('.plan');
@@ -343,12 +341,14 @@ $('#list').addEventListener('click', e => {
     if (e.target.closest('.reg')) {
       const q = { kind: p.kind, title: pl.querySelector('.t').value.trim(), date: pl.querySelector('.d').value,
         start: pl.querySelector('.s').value, end: pl.querySelector('.e').value, note: p.note };
-      if (!q.title) { $('#msg').textContent = '題名を入れてください'; return; }
-      if (q.kind === 'event' && !q.date) { $('#msg').textContent = 'Calendar の日付を入れてください'; return; }
+      if (!q.title) { toast('題名を入れてください', 'err'); return; }
+      if (q.kind === 'event' && !q.date) { toast('Calendar の日付を入れてください', 'err'); return; }
       Object.assign(p, q);
-      $('#msg').textContent = '登録中…';
-      google.script.run.withSuccessHandler(reg => { $('#msg').textContent = (q.kind === 'event' ? 'Calendar（FAMILY）' : 'Todo（SCHOOL）') + ' に登録しました'; it.registered = reg; render(); })
-        .withFailureHandler(err => $('#msg').textContent = 'エラー：' + err.message).registerPlan(id, i, q);
+      const rb = e.target.closest('.reg');
+      rb.disabled = true; rb.textContent = '登録中…';
+      toast('登録中…', '', 0);
+      google.script.run.withSuccessHandler(reg => { toast((q.kind === 'event' ? 'Calendar（FAMILY）' : 'Todo（SCHOOL）') + ' に登録しました'); it.registered = reg; render(); })
+        .withFailureHandler(err => { rb.disabled = false; rb.textContent = '登録'; toast('登録できませんでした：' + err.message, 'err'); }).registerPlan(id, i, q);
     }
     return;
   }
@@ -363,7 +363,6 @@ $('#bulk').addEventListener('click', () => {
 });
 
 $('#refresh').addEventListener('click', () => load('refreshNow'));
-$('#fileSave').addEventListener('click', saveReady);
 $('#fileClose').addEventListener('click', () => { $('#fileBar').style.display = 'none'; });
 
 { const c = window.HUB_CACHED && window.HUB_CACHED(); if (c) render(c); }
