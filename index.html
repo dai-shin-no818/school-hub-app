@@ -170,7 +170,7 @@
 </div>
 <div id="msg"></div>
 <div id="list"></div>
-<div style="text-align:center;color:#9aa0a8;font-size:11px;margin:24px 0 8px">画面の版 2026/10/02 05:25</div>
+<div style="text-align:center;color:#9aa0a8;font-size:11px;margin:24px 0 8px">画面の版 2026/10/02 05:37</div>
 <div id="toast"></div>
 <input type="file" id="pdfInput" accept="application/pdf" style="display:none">
 <div id="fileBar">
@@ -223,7 +223,10 @@ function render(list) {
 
 function card(it) {
   const files = it.files || [], links = it.links || [];
-  const acts = files.map((f, i) => '<button data-file="' + i + '">' + IC.file + esc(f.name) + '</button>')
+  
+  const acts = files.map((f, i) => f.url
+      ? '<a href="' + esc(f.url) + '" target="_blank" rel="noopener">' + IC.file + esc(f.name) + '</a>'
+      : '<button data-file="' + i + '">' + IC.file + esc(f.name) + '</button>')
     .concat(links.map(l => '<a href="' + esc(l.url) + '" target="_blank" rel="noopener">' + esc(l.name) + '</a>'))
     .concat(['<button data-addpdf="1">' + IC.add + 'PDF を追加</button>']);
   return '<div class="card' + (it.read ? ' done' : ' unread') + (opened.has(it.id) ? ' open' : '') + '" data-id="' + esc(it.id) + '">' +
@@ -325,6 +328,9 @@ function openFile(id, index, btn) {
   google.script.run.withSuccessHandler(f => {
     toast('');
     if (btn) btn.disabled = false;
+    
+    const it = items.find(x => x.id === id);
+    if (it && it.files[index]) { it.files[index].url = f.url; render(); }
     $('#fileName').textContent = f.name;
     $('#fileOpen').href = f.url;
     $('#fileBar').style.display = 'flex';
