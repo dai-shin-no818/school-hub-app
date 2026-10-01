@@ -172,7 +172,7 @@
 </head>
 <body>
 <header>
-  <h1>School Hub<span id="ver" style="font-size:11px;font-weight:400;color:#9aa0a8;margin-left:8px">v5</span></h1>
+  <h1>School Hub<span id="ver" style="font-size:11px;font-weight:400;color:#9aa0a8;margin-left:8px">v6</span></h1>
   <button id="refresh">更新</button>
 </header>
 <div id="newPage"><a id="newPageLink" target="_blank">スマホ用の画面を開く（Google でログイン・ホーム画面に追加できます）</a></div>
@@ -246,7 +246,7 @@ function renderFilter() {
 }
 
 function render(list) {
-  if (list) items = list;
+  if (list) { items = list; applyPending(true); }
   const shown = shownItems();
   $('#list').innerHTML = shown.length ? shown.map(card).join('') : '<div class="empty">連絡はありません</div>';
   renderFilter();
@@ -295,11 +295,38 @@ function plansHtml(it) {
 }
 
 
+
+function loadPending() { try { return JSON.parse(localStorage.getItem('hub_pending_read') || '{}'); } catch (e) { return {}; } }
+function savePending(p) { try { localStorage.setItem('hub_pending_read', JSON.stringify(p)); } catch (e) {} }
+window.HUB_PENDING = () => Object.keys(loadPending()).length;
+function sendRead(ids, read) {
+  google.script.run.withSuccessHandler(() => {
+    const q = loadPending();
+    ids.forEach(id => { if (q[id] === read) delete q[id]; });
+    savePending(q);
+  }).withFailureHandler(e => toast('チェックを記録できませんでした（あとでもう一度送ります）：' + e.message, 'err')).setRead(ids, read);
+}
+
+let pendingSent = false;
+function applyPending(resend) {
+  const p = loadPending();
+  const ids = Object.keys(p);
+  if (!ids.length) return;
+  items.forEach(it => { if (it.id in p) it.read = p[it.id]; });
+  if (resend && !pendingSent) {
+    pendingSent = true;
+    [true, false].forEach(v => { const g = ids.filter(id => p[id] === v); if (g.length) sendRead(g, v); });
+  }
+}
+
 function setRead(ids, read) {
   items.forEach(it => { if (ids.includes(it.id)) it.read = read; });
+  const p = loadPending();
+  ids.forEach(id => { p[id] = read; });
+  savePending(p);
   render();
   if (window.HUB_SAVE_CACHE) window.HUB_SAVE_CACHE(items);
-  google.script.run.withFailureHandler(e => toast('記録できませんでした：' + e.message, 'err')).setRead(ids, read);
+  sendRead(ids, read);
 }
 
 
@@ -509,11 +536,12 @@ if (!window.HUB_STATIC) google.script.run.withSuccessHandler(u => { $('#newPageL
 </script>
 <script>
 (function(){
-  var VER = "v5";
+  var VER = "v6";
   function check(){
     fetch(location.pathname + '?v=' + Date.now(), { cache: 'no-store' }).then(function(r){ return r.text(); }).then(function(t){
       var m = t.match(/id="ver"[^>]*>([^<]+)</);
-      if (m && m[1] !== VER) location.reload();
+      
+      if (m && m[1] !== VER && !(window.HUB_PENDING && window.HUB_PENDING())) location.reload();
     }).catch(function(){});
   }
   check();
