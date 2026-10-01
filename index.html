@@ -178,7 +178,7 @@
 </head>
 <body>
 <header>
-  <h1>School Hub<span id="ver" style="font-size:11px;font-weight:400;color:#9aa0a8;margin-left:8px">v12</span></h1>
+  <h1>School Hub<span id="ver" style="font-size:11px;font-weight:400;color:#9aa0a8;margin-left:8px">v13</span></h1>
   <button id="refresh">更新</button>
 </header>
 <div id="newPage"><a id="newPageLink" target="_blank">スマホ用の画面を開く（Google でログイン・ホーム画面に追加できます）</a></div>
@@ -289,6 +289,14 @@ function planTags(it) {
 }
 
 
+function cleanTitle(title, kids) {
+  let t = String(title || '');
+  (kids || []).forEach(k => { t = t.split(k).join(''); });
+  t = t.replace(/[（(]\s*[・、,\s]*[）)]/g, '').replace(/^[\s・、,]+|[\s・、,]+$/g, '').replace(/[・、,]{2,}/g, '・').replace(/\s{2,}/g, ' ').trim();
+  return t || String(title || '');
+}
+
+
 function plansHtml(it) {
   const items = (it.plan && it.plan.items) || [], reg = it.registered || {};
   const by = it.plan && it.plan.model ? '<span style="font-size:11px;font-weight:400;margin-left:6px">' + (/lite/.test(it.plan.model) ? 'Flash-Lite' : 'Flash') + '</span>' : '';
@@ -298,7 +306,7 @@ function plansHtml(it) {
   return '<div class="plans">' + head + items.map((p, i) => !livePlan(p, i, reg) ? '' : '<div class="plan' + (reg[i] ? ' done' : '') + '" data-plan="' + i + '">' +
     '<div class="r"><button class="kind ' + esc(p.kind) + '" data-kind="' + esc(p.kind) + '">' + (p.kind === 'event' ? IC.cal + 'Calendar（FAMILY）' : IC.todo + 'Todo（SCHOOL）') + '</button>' +
     (reg[i] ? '<span class="note">登録済み</span>' : '<button class="reg">登録</button>') + '</div>' +
-    '<div class="r"><input class="t" value="' + esc(p.title) + '"></div>' +
+    '<div class="r"><input class="t" value="' + esc(cleanTitle(p.title, it.kids)) + '"></div>' +
     '<div class="r"><input class="d" type="date" value="' + esc(p.date) + '">' +
     '<input class="s" type="time" value="' + esc(p.start) + '"' + (p.kind === 'todo' ? ' style="display:none"' : '') + '>' +
     '<input class="e" type="time" value="' + esc(p.end) + '"' + (p.kind === 'todo' ? ' style="display:none"' : '') + '></div>' +
@@ -632,7 +640,7 @@ if (!window.HUB_STATIC) google.script.run.withSuccessHandler(u => { $('#newPageL
 </script>
 <script>
 (function(){
-  var VER = "v12";
+  var VER = "v13";
   function check(){
     fetch(location.pathname + '?v=' + Date.now(), { cache: 'no-store' }).then(function(r){ return r.text(); }).then(function(t){
       var m = t.match(/id="ver"[^>]*>([^<]+)</);
