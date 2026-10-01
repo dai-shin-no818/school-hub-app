@@ -142,6 +142,15 @@
   #fileOpen { font-size:14px; font-weight:700; border:1.5px solid var(--accent); color:var(--accent); background:none;
                          border-radius:99px; padding:5px 14px; text-decoration:none; }
   #fileClose { border:none; background:none; color:var(--sub); padding:4px 6px; }
+  #viewer { display:none; position:fixed; inset:0; background:var(--bg); z-index:20; flex-direction:column; }
+  #viewer.on { display:flex; }
+  .vbar { display:flex; align-items:center; gap:10px; padding:calc(10px + env(safe-area-inset-top)) 14px 10px; border-bottom:1px solid var(--line); background:var(--card); }
+  #vName { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:14px; font-weight:600; }
+  #vDrive { font-size:13px; font-weight:600; border:1px solid var(--line); border-radius:99px; padding:4px 12px; text-decoration:none; }
+  #vClose { border:none; background:none; color:var(--text); font-size:20px; padding:2px 6px; }
+  #vPages { flex:1; overflow:auto; -webkit-overflow-scrolling:touch; padding:10px 8px calc(16px + env(safe-area-inset-bottom)); }
+  #vPages canvas { display:block; width:100%; height:auto; margin:0 auto 10px; background:#fff; border-radius:4px; box-shadow:0 1px 4px rgba(0,0,0,.2); }
+  #vPages .vmsg { color:var(--sub); text-align:center; padding:40px 0; }
   #toast { display:none; position:fixed; left:50%; transform:translateX(-50%); bottom:calc(76px + env(safe-area-inset-bottom)); max-width:calc(100% - 32px);
            background:var(--text); color:var(--bg); border-radius:99px; padding:8px 16px; font-size:13px; font-weight:600; box-shadow:0 4px 16px rgba(0,0,0,.25); z-index:10; }
   #toast.err { background:#b91c1c; color:#fff; border-radius:12px; }
@@ -170,7 +179,15 @@
 </div>
 <div id="msg"></div>
 <div id="list"></div>
-<div style="text-align:center;color:#9aa0a8;font-size:11px;margin:24px 0 8px">画面の版 2026/10/02 05:37</div>
+<div id="viewer">
+  <div class="vbar">
+    <span id="vName"></span>
+    <a id="vDrive" target="_blank" rel="noopener">ドライブで開く</a>
+    <button id="vClose" aria-label="閉じる">✕</button>
+  </div>
+  <div id="vPages"></div>
+</div>
+<div style="text-align:center;color:#9aa0a8;font-size:11px;margin:24px 0 8px">画面の版 2026/10/02 05:56</div>
 <div id="toast"></div>
 <input type="file" id="pdfInput" accept="application/pdf" style="display:none">
 <div id="fileBar">
@@ -224,9 +241,7 @@ function render(list) {
 function card(it) {
   const files = it.files || [], links = it.links || [];
   
-  const acts = files.map((f, i) => f.url
-      ? '<a href="' + esc(f.url) + '" target="_blank" rel="noopener">' + IC.file + esc(f.name) + '</a>'
-      : '<button data-file="' + i + '">' + IC.file + esc(f.name) + '</button>')
+  const acts = files.map((f, i) => '<button data-file="' + i + '">' + IC.file + esc(f.name) + '</button>')
     .concat(links.map(l => '<a href="' + esc(l.url) + '" target="_blank" rel="noopener">' + esc(l.name) + '</a>'))
     .concat(['<button data-addpdf="1">' + IC.add + 'PDF を追加</button>']);
   return '<div class="card' + (it.read ? ' done' : ' unread') + (opened.has(it.id) ? ' open' : '') + '" data-id="' + esc(it.id) + '">' +
@@ -337,6 +352,61 @@ function openFile(id, index, btn) {
   }).withFailureHandler(e => { if (btn) btn.disabled = false; toast('PDF を開けませんでした：' + e.message, 'err'); }).getFile(id, index);
 }
 
+
+let pdfjsLoading = null;
+function loadPdfJs() {
+  if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+  if (!pdfjsLoading) pdfjsLoading = new Promise((ok, ng) => {
+    const sc = document.createElement('script');
+    sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    sc.onload = () => { pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; ok(pdfjsLib); };
+    sc.onerror = () => { pdfjsLoading = null; ng(new Error('PDF を表示する部品を読み込めませんでした')); };
+    document.head.appendChild(sc);
+  });
+  return pdfjsLoading;
+}
+let viewerToken = 0;
+function openViewer(id, index) {
+  const it = items.find(x => x.id === id), f = it && it.files[index];
+  const token = ++viewerToken;
+  $('#vName').textContent = f ? f.name : 'PDF';
+  $('#vDrive').style.display = f && f.url ? '' : 'none';
+  if (f && f.url) $('#vDrive').href = f.url;
+  $('#vPages').innerHTML = '<div class="vmsg">PDF を読み込んでいます…</div>';
+  $('#viewer').classList.add('on');
+  document.body.style.overflow = 'hidden';
+  Promise.all([loadPdfJs(), new Promise((ok, ng) => google.script.run.withSuccessHandler(ok).withFailureHandler(ng).getPdfData(id, index))])
+    .then(([lib, d]) => {
+      if (token !== viewerToken) return;
+      if (f) f.url = d.url;
+      $('#vDrive').href = d.url; $('#vDrive').style.display = '';
+      const bin = atob(d.b64), buf = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+      return lib.getDocument({ data: buf }).promise.then(async pdf => {
+        $('#vPages').innerHTML = '';
+        const w = $('#vPages').clientWidth - 16, ratio = Math.min(window.devicePixelRatio || 1, 2);
+        for (let p = 1; p <= pdf.numPages; p++) {
+          if (token !== viewerToken) return;
+          const page = await pdf.getPage(p);
+          const base = page.getViewport({ scale: 1 });
+          const vp = page.getViewport({ scale: (w / base.width) * ratio });
+          const cv = document.createElement('canvas');
+          cv.width = vp.width; cv.height = vp.height;
+          $('#vPages').appendChild(cv);
+          await page.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise;
+        }
+      });
+    })
+    .catch(err => { if (token === viewerToken) $('#vPages').innerHTML = '<div class="vmsg">PDF を表示できませんでした：' + esc(err.message) + '<br>「ドライブで開く」から開けます</div>'; });
+}
+function closeViewer() {
+  viewerToken++;
+  $('#viewer').classList.remove('on');
+  document.body.style.overflow = '';
+  $('#vPages').innerHTML = '';
+}
+$('#vClose').addEventListener('click', closeViewer);
+
 ['#tabs', '#kidTabs'].forEach(sel => $(sel).addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
   filter = b.dataset.f;
@@ -349,7 +419,7 @@ $('#list').addEventListener('click', e => {
   const id = c.dataset.id;
   if (e.target.classList.contains('chk')) { setRead([id], e.target.checked); return; }
   const fb = e.target.closest('[data-file]');
-  if (fb) { openFile(id, Number(fb.dataset.file), fb); return; }
+  if (fb) { openViewer(id, Number(fb.dataset.file)); return; }
   const it = items.find(x => x.id === id);
   if (e.target.closest('[data-addpdf]')) { addPdfFor = id; $('#pdfInput').value = ''; $('#pdfInput').click(); return; }
   if (e.target.closest('[data-replan]')) {
