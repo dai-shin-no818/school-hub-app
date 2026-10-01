@@ -170,7 +170,7 @@
 </div>
 <div id="msg"></div>
 <div id="list"></div>
-<div style="text-align:center;color:#9aa0a8;font-size:11px;margin:24px 0 8px">画面の版 2026/10/02 04:51</div>
+<div style="text-align:center;color:#9aa0a8;font-size:11px;margin:24px 0 8px">画面の版 2026/10/02 05:25</div>
 <div id="toast"></div>
 <input type="file" id="pdfInput" accept="application/pdf" style="display:none">
 <div id="fileBar">
@@ -349,7 +349,7 @@ $('#list').addEventListener('click', e => {
   if (e.target.closest('[data-replan]')) {
     toast('AI で読んでいます…（1 分ほど）', '', 0);
     google.script.run.withSuccessHandler(plan => { toast('読み終わりました'); it.plan = plan; it.registered = {}; render(); })
-      .withFailureHandler(err => toast('読めませんでした：' + err.message, 'err')).replan(id);
+      .withFailureHandler(err => toast(/上限/.test(err.message) ? err.message : '読めませんでした：' + err.message, 'err')).replan(id);
     return;
   }
   const pl = e.target.closest('.plan');
@@ -400,7 +400,8 @@ $('#pdfInput').addEventListener('change', () => {
       const it = items.find(x => x.id === id);
       if (it) { it.files = res.files; if (res.plan) it.plan = res.plan; }
       opened.add(id); render();
-      toast('PDF を追加しました' + (res.plan ? '（候補を作り直しました）' : ''));
+      if (res.warn) { if (it) it.plan = null; render(); toast('PDF を追加しました。' + res.warn, 'err'); }
+      else toast('PDF を追加しました' + (res.plan ? '（候補を作り直しました）' : ''));
     }).withFailureHandler(err => toast('PDF を追加できませんでした：' + err.message, 'err')).addPdf(id, file.name, b64);
   };
   reader.onerror = () => toast('PDF を読み込めませんでした', 'err');
