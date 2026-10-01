@@ -222,18 +222,18 @@ function planTags(it) {
   const items = (it.plan && it.plan.items) || [], reg = it.registered || {};
   const left = items.map((p, i) => ({ p, i })).filter(x => !reg[x.i]);
   const ev = left.filter(x => x.p.kind === 'event').length, td = left.filter(x => x.p.kind === 'todo').length;
-  if (ev || td) return (ev ? '<span class="ptag ev">📅 予定 ' + ev + '</span>' : '') + (td ? '<span class="ptag td">✅ やること ' + td + '</span>' : '');
+  if (ev || td) return (ev ? '<span class="ptag ev">📅 Calendar ' + ev + '</span>' : '') + (td ? '<span class="ptag td">✅ Todo ' + td + '</span>' : '');
   return items.length ? '<span class="ptag ok">登録済み</span>' : '';
 }
 
 
 function plansHtml(it) {
   const items = (it.plan && it.plan.items) || [], reg = it.registered || {};
-  const head = '<h3>予定・やることの候補<button data-replan="1">' + (it.plan && !it.plan.skipped ? 'AI で読み直す' : 'AI で読む') + '</button></h3>';
+  const head = '<h3>Calendar・Todo の候補<button data-replan="1">' + (it.plan && !it.plan.skipped ? 'AI で読み直す' : 'AI で読む') + '</button></h3>';
   if (!it.plan || it.plan.skipped) return '<div class="plans">' + head + '<div class="note">' + (it.plan ? '古い連絡なので読んでいません' : 'まだ読んでいません（30 分以内に自動で読みます）') + '</div></div>';
   if (!items.length) return '<div class="plans">' + head + '<div class="note">登録が必要なものは見つかりませんでした</div></div>';
   return '<div class="plans">' + head + items.map((p, i) => '<div class="plan' + (reg[i] ? ' done' : '') + '" data-plan="' + i + '">' +
-    '<div class="r"><button class="kind ' + esc(p.kind) + '" data-kind="' + esc(p.kind) + '">' + (p.kind === 'event' ? '📅 予定（FAMILY）' : '✅ やること（SCHOOL）') + '</button>' +
+    '<div class="r"><button class="kind ' + esc(p.kind) + '" data-kind="' + esc(p.kind) + '">' + (p.kind === 'event' ? '📅 Calendar（FAMILY）' : '✅ Todo（SCHOOL）') + '</button>' +
     (reg[i] ? '<span class="note">登録済み</span>' : '<button class="reg">登録</button>') + '</div>' +
     '<div class="r"><input class="t" value="' + esc(p.title) + '"></div>' +
     '<div class="r"><input class="d" type="date" value="' + esc(p.date) + '">' +
@@ -318,10 +318,10 @@ $('#list').addEventListener('click', e => {
       const q = { kind: p.kind, title: pl.querySelector('.t').value.trim(), date: pl.querySelector('.d').value,
         start: pl.querySelector('.s').value, end: pl.querySelector('.e').value, note: p.note };
       if (!q.title) { $('#msg').textContent = '題名を入れてください'; return; }
-      if (q.kind === 'event' && !q.date) { $('#msg').textContent = '予定の日付を入れてください'; return; }
+      if (q.kind === 'event' && !q.date) { $('#msg').textContent = 'Calendar の日付を入れてください'; return; }
       Object.assign(p, q);
       $('#msg').textContent = '登録中…';
-      google.script.run.withSuccessHandler(reg => { $('#msg').textContent = (q.kind === 'event' ? 'カレンダー FAMILY' : 'ToDo SCHOOL') + ' に登録しました'; it.registered = reg; render(); })
+      google.script.run.withSuccessHandler(reg => { $('#msg').textContent = (q.kind === 'event' ? 'Calendar（FAMILY）' : 'Todo（SCHOOL）') + ' に登録しました'; it.registered = reg; render(); })
         .withFailureHandler(err => $('#msg').textContent = 'エラー：' + err.message).registerPlan(id, i, q);
     }
     return;
