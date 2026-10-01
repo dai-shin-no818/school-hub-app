@@ -171,6 +171,7 @@
 <div id="msg"></div>
 <div id="list"></div>
 <div id="toast"></div>
+<input type="file" id="pdfInput" accept="application/pdf" style="display:none">
 <div id="fileBar">
   <span id="fileName"></span>
   <a id="fileOpen" target="_blank" rel="noopener">開く（ドライブ）</a>
@@ -185,6 +186,7 @@ const IC = {
   cal: ICON('<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>'),
   todo: ICON('<rect x="3" y="3" width="18" height="18" rx="3"/><path d="M8 12l3 3 5-6"/>'),
   file: ICON('<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>'),
+  add: ICON('<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M12 11v6M9 14h6"/>'),
   clip: ICON('<path d="M21 11l-8.5 8.5a5 5 0 0 1-7-7L14 4a3.5 3.5 0 0 1 5 5l-8.5 8.5a2 2 0 0 1-3-3L15 7"/>')
 };
 let items = [], filter = 'all';
@@ -221,7 +223,8 @@ function render(list) {
 function card(it) {
   const files = it.files || [], links = it.links || [];
   const acts = files.map((f, i) => '<button data-file="' + i + '">' + IC.file + esc(f.name) + '</button>')
-    .concat(links.map(l => '<a href="' + esc(l.url) + '" target="_blank" rel="noopener">' + esc(l.name) + '</a>'));
+    .concat(links.map(l => '<a href="' + esc(l.url) + '" target="_blank" rel="noopener">' + esc(l.name) + '</a>'))
+    .concat(['<button data-addpdf="1">' + IC.add + 'PDF を追加</button>']);
   return '<div class="card' + (it.read ? ' done' : ' unread') + (opened.has(it.id) ? ' open' : '') + '" data-id="' + esc(it.id) + '">' +
     '<div class="row1"><input type="checkbox" class="chk" title="済にする"' + (it.read ? ' checked' : '') + '><div class="main">' +
     '<div class="top"><span class="badge src-' + esc(it.source) + '">' + esc(SRC[it.source] || it.source) + '</span>' +
@@ -323,6 +326,7 @@ $('#list').addEventListener('click', e => {
   const fb = e.target.closest('[data-file]');
   if (fb) { openFile(id, Number(fb.dataset.file), fb); return; }
   const it = items.find(x => x.id === id);
+  if (e.target.closest('[data-addpdf]')) { addPdfFor = id; $('#pdfInput').value = ''; $('#pdfInput').click(); return; }
   if (e.target.closest('[data-replan]')) {
     toast('AI で読んでいます…（1 分ほど）', '', 0);
     google.script.run.withSuccessHandler(plan => { toast('読み終わりました'); it.plan = plan; it.registered = {}; render(); })
@@ -363,6 +367,26 @@ $('#bulk').addEventListener('click', () => {
 });
 
 $('#refresh').addEventListener('click', () => load('refreshNow'));
+
+let addPdfFor = null;
+$('#pdfInput').addEventListener('change', () => {
+  const file = $('#pdfInput').files[0], id = addPdfFor;
+  if (!file || !id) return;
+  if (file.size > 20e6) { toast('PDF が大きすぎます（20MB まで）', 'err'); return; }
+  toast('PDF を保存して、AI で読み直しています…（1 分ほど）', '', 0);
+  const reader = new FileReader();
+  reader.onload = () => {
+    const b64 = String(reader.result).split(',')[1];
+    google.script.run.withSuccessHandler(res => {
+      const it = items.find(x => x.id === id);
+      if (it) { it.files = res.files; if (res.plan) it.plan = res.plan; }
+      opened.add(id); render();
+      toast('PDF を追加しました' + (res.plan ? '（候補を作り直しました）' : ''));
+    }).withFailureHandler(err => toast('PDF を追加できませんでした：' + err.message, 'err')).addPdf(id, file.name, b64);
+  };
+  reader.onerror = () => toast('PDF を読み込めませんでした', 'err');
+  reader.readAsDataURL(file);
+});
 $('#fileClose').addEventListener('click', () => { $('#fileBar').style.display = 'none'; });
 
 { const c = window.HUB_CACHED && window.HUB_CACHED(); if (c) render(c); }
