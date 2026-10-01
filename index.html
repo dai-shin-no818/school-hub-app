@@ -104,6 +104,9 @@
   .badge { font-size:11px; font-weight:700; padding:1px 8px; border-radius:99px; border:1.5px solid currentColor; white-space:nowrap; }
   .src-sakura { color:var(--sakura); } .src-codmon { color:var(--codmon); } .src-tetoru { color:var(--tetoru); }
   .from { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .kids { display:flex; gap:4px; flex-wrap:wrap; margin-top:4px; }
+  .kid { font-size:11px; font-weight:700; padding:1px 8px; border-radius:99px; background:var(--line); color:var(--text); }
+  #kidTabs:empty { display:none; }
   .date { margin-left:auto; white-space:nowrap; }
   .title { font-weight:600; margin-top:4px; }
   .clip { color:var(--sub); font-size:12px; font-weight:400; }
@@ -137,6 +140,7 @@
   <button data-f="codmon">コドモン</button>
   <button data-f="tetoru">tetoru</button>
 </div>
+<div class="tabs" id="kidTabs"></div>
 <div class="bulkbar"><button id="bulk">表示中をすべて済にする</button></div>
 <div id="login" style="display:none;text-align:center;padding:24px 0">
   <p>はじめに Google でログインしてください（この端末で 1 回だけ）</p>
@@ -161,7 +165,18 @@ function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ 
 function linkify(s) { return esc(s).replace(/https?:\/\/[^\s<]+/g, u => '<a href="' + u + '" target="_blank" rel="noopener">' + u + '</a>'); }
 
 function shownItems() {
-  return items.filter(it => filter === 'all' ? true : filter === 'unread' ? !it.read : it.source === filter);
+  return items.filter(it => filter === 'all' ? true : filter === 'unread' ? !it.read
+    : filter.startsWith('kid:') ? (it.kids || []).includes(filter.slice(4)) : it.source === filter);
+}
+
+
+function renderKidTabs() {
+  const kids = [];
+  items.forEach(it => (it.kids || []).forEach(k => { if (!kids.includes(k)) kids.push(k); }));
+  $('#kidTabs').innerHTML = kids.map(k => {
+    const n = items.filter(it => !it.read && (it.kids || []).includes(k)).length;
+    return '<button data-f="kid:' + esc(k) + '"' + (filter === 'kid:' + k ? ' class="on"' : '') + '>' + esc(k) + (n ? ' ' + n : '') + '</button>';
+  }).join('');
 }
 
 function render(list) {
@@ -170,6 +185,7 @@ function render(list) {
   $('#list').innerHTML = shown.length ? shown.map(card).join('') : '<div class="empty">連絡はありません</div>';
   const unread = items.filter(it => !it.read).length;
   $('#tabs [data-f="unread"]').textContent = unread ? '未読 ' + unread : '未読';
+  renderKidTabs();
   $('#bulk').style.visibility = shown.some(it => !it.read) ? 'visible' : 'hidden';
 }
 
@@ -182,6 +198,7 @@ function card(it) {
     '<div class="top"><span class="badge src-' + esc(it.source) + '">' + esc(SRC[it.source] || it.source) + '</span>' +
     '<span class="from">' + esc(it.from) + '</span><span class="date">' + esc(it.date) + '</span></div>' +
     '<div class="title">' + esc(it.title) + (files.length ? ' <span class="clip">📎' + files.length + '</span>' : '') + '</div>' +
+    ((it.kids || []).length ? '<div class="kids">' + it.kids.map(k => '<span class="kid">' + esc(k) + '</span>').join('') + '</div>' : '') +
     '</div></div>' +
     '<div class="body">' + linkify(it.body) + (acts.length ? '<div class="acts">' + acts.join('') + '</div>' : '') + '</div></div>';
 }
@@ -229,12 +246,12 @@ function saveReady() {
   document.body.appendChild(a); a.click(); a.remove();
 }
 
-$('#tabs').addEventListener('click', e => {
+['#tabs', '#kidTabs'].forEach(sel => $(sel).addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
   filter = b.dataset.f;
-  document.querySelectorAll('#tabs button').forEach(x => x.classList.toggle('on', x === b));
+  document.querySelectorAll('#tabs button').forEach(x => x.classList.toggle('on', x.dataset.f === filter));
   render();
-});
+}));
 
 $('#list').addEventListener('click', e => {
   const c = e.target.closest('.card'); if (!c) return;
