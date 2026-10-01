@@ -107,6 +107,7 @@
   .kids { display:flex; gap:4px; flex-wrap:wrap; margin-top:4px; }
   .kid { font-size:11px; font-weight:700; padding:1px 8px; border-radius:99px; background:var(--line); color:var(--text); }
   #kidTabs:empty { display:none; }
+  .ic { width:1.05em; height:1.05em; vertical-align:-0.15em; margin-right:3px; }
   .ptag { font-size:11px; font-weight:700; padding:1px 8px; border-radius:99px; border:1.5px solid currentColor; }
   .ptag.ev { color:#ea580c; } .ptag.td { color:#16a34a; } .ptag.ok { color:var(--sub); }
   .plans { margin-top:10px; border-top:1px dashed var(--line); padding-top:8px; }
@@ -172,6 +173,14 @@
 <script>
 const $ = s => document.querySelector(s);
 const SRC = { sakura: 'さくらdays', codmon: 'コドモン', tetoru: 'tetoru' };
+
+const ICON = (d) => '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>';
+const IC = {
+  cal: ICON('<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>'),
+  todo: ICON('<rect x="3" y="3" width="18" height="18" rx="3"/><path d="M8 12l3 3 5-6"/>'),
+  file: ICON('<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>'),
+  clip: ICON('<path d="M21 11l-8.5 8.5a5 5 0 0 1-7-7L14 4a3.5 3.5 0 0 1 5 5l-8.5 8.5a2 2 0 0 1-3-3L15 7"/>')
+};
 let items = [], filter = 'all';
 const opened = new Set();
 
@@ -205,13 +214,13 @@ function render(list) {
 
 function card(it) {
   const files = it.files || [], links = it.links || [];
-  const acts = files.map((f, i) => '<button data-file="' + i + '">📄 ' + esc(f.name) + '</button>')
+  const acts = files.map((f, i) => '<button data-file="' + i + '">' + IC.file + esc(f.name) + '</button>')
     .concat(links.map(l => '<a href="' + esc(l.url) + '" target="_blank" rel="noopener">' + esc(l.name) + '</a>'));
   return '<div class="card' + (it.read ? ' done' : ' unread') + (opened.has(it.id) ? ' open' : '') + '" data-id="' + esc(it.id) + '">' +
     '<div class="row1"><input type="checkbox" class="chk" title="済にする"' + (it.read ? ' checked' : '') + '><div class="main">' +
     '<div class="top"><span class="badge src-' + esc(it.source) + '">' + esc(SRC[it.source] || it.source) + '</span>' +
     '<span class="from">' + esc(it.from) + '</span><span class="date">' + esc(it.date) + '</span></div>' +
-    '<div class="title">' + esc(it.title) + (files.length ? ' <span class="clip">📎' + files.length + '</span>' : '') + '</div>' +
+    '<div class="title">' + esc(it.title) + (files.length ? ' <span class="clip">' + IC.clip + files.length + '</span>' : '') + '</div>' +
     '<div class="kids">' + (it.kids || []).map(k => '<span class="kid">' + esc(k) + '</span>').join('') + planTags(it) + '</div>' +
     '</div></div>' +
     '<div class="body">' + linkify(it.body) + (acts.length ? '<div class="acts">' + acts.join('') + '</div>' : '') + plansHtml(it) + '</div></div>';
@@ -222,7 +231,7 @@ function planTags(it) {
   const items = (it.plan && it.plan.items) || [], reg = it.registered || {};
   const left = items.map((p, i) => ({ p, i })).filter(x => !reg[x.i]);
   const ev = left.filter(x => x.p.kind === 'event').length, td = left.filter(x => x.p.kind === 'todo').length;
-  if (ev || td) return (ev ? '<span class="ptag ev">📅 Calendar ' + ev + '</span>' : '') + (td ? '<span class="ptag td">✅ Todo ' + td + '</span>' : '');
+  if (ev || td) return (ev ? '<span class="ptag ev">' + IC.cal + 'Calendar ' + ev + '</span>' : '') + (td ? '<span class="ptag td">' + IC.todo + 'Todo ' + td + '</span>' : '');
   return items.length ? '<span class="ptag ok">登録済み</span>' : '';
 }
 
@@ -233,7 +242,7 @@ function plansHtml(it) {
   if (!it.plan || it.plan.skipped) return '<div class="plans">' + head + '<div class="note">' + (it.plan ? '古い連絡なので読んでいません' : 'まだ読んでいません（30 分以内に自動で読みます）') + '</div></div>';
   if (!items.length) return '<div class="plans">' + head + '<div class="note">登録が必要なものは見つかりませんでした</div></div>';
   return '<div class="plans">' + head + items.map((p, i) => '<div class="plan' + (reg[i] ? ' done' : '') + '" data-plan="' + i + '">' +
-    '<div class="r"><button class="kind ' + esc(p.kind) + '" data-kind="' + esc(p.kind) + '">' + (p.kind === 'event' ? '📅 Calendar（FAMILY）' : '✅ Todo（SCHOOL）') + '</button>' +
+    '<div class="r"><button class="kind ' + esc(p.kind) + '" data-kind="' + esc(p.kind) + '">' + (p.kind === 'event' ? IC.cal + 'Calendar（FAMILY）' : IC.todo + 'Todo（SCHOOL）') + '</button>' +
     (reg[i] ? '<span class="note">登録済み</span>' : '<button class="reg">登録</button>') + '</div>' +
     '<div class="r"><input class="t" value="' + esc(p.title) + '"></div>' +
     '<div class="r"><input class="d" type="date" value="' + esc(p.date) + '">' +
